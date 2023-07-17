@@ -19,13 +19,11 @@ from labelme import __appname__
 from labelme import PY2
 
 from . import utils
-from labelme.ai import MODELS
 from labelme.config import get_config
 from labelme.label_file import LabelFile
 from labelme.label_file import LabelFileError
 from labelme.logger import logger
 from labelme.shape import Shape
-from labelme.widgets import BrightnessContrastDialog
 from labelme.widgets import Canvas
 from labelme.widgets import FileDialogPreview
 from labelme.widgets import LabelDialog
@@ -368,14 +366,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr("Start drawing linestrip. Ctrl+LeftClick ends creation."),
             enabled=False,
         )
-        createAiPolygonMode = action(
-            self.tr("Create AI-Polygon"),
-            lambda: self.toggleDrawMode(False, createMode="ai_polygon"),
-            None,
-            "objects",
-            self.tr("Start drawing ai_polygon. Ctrl+LeftClick ends creation."),
-            enabled=False,
-        )
         editMode = action(
             self.tr("Edit Polygons"),
             self.setEditMode,
@@ -391,30 +381,6 @@ class MainWindow(QtWidgets.QMainWindow):
             shortcuts["delete_polygon"],
             "cancel",
             self.tr("Delete the selected polygons"),
-            enabled=False,
-        )
-        duplicate = action(
-            self.tr("Duplicate Polygons"),
-            self.duplicateSelectedShape,
-            shortcuts["duplicate_polygon"],
-            "copy",
-            self.tr("Create a duplicate of the selected polygons"),
-            enabled=False,
-        )
-        copy = action(
-            self.tr("Copy Polygons"),
-            self.copySelectedShape,
-            shortcuts["copy_polygon"],
-            "copy_clipboard",
-            self.tr("Copy selected polygons to clipboard"),
-            enabled=False,
-        )
-        paste = action(
-            self.tr("Paste Polygons"),
-            self.pasteSelectedShape,
-            shortcuts["paste_polygon"],
-            "paste",
-            self.tr("Paste copied polygons"),
             enabled=False,
         )
         undoLastPoint = action(
@@ -539,14 +505,6 @@ class MainWindow(QtWidgets.QMainWindow):
             checkable=True,
             enabled=False,
         )
-        brightnessContrast = action(
-            "&Brightness Contrast",
-            self.brightnessContrast,
-            None,
-            "color",
-            "Adjust brightness and contrast",
-            enabled=False,
-        )
         # Group zoom controls into a list for easier toggling.
         zoomActions = (
             self.zoomWidget,
@@ -607,9 +565,6 @@ class MainWindow(QtWidgets.QMainWindow):
             toggleKeepPrevMode=toggle_keep_prev_mode,
             delete=delete,
             edit=edit,
-            duplicate=duplicate,
-            copy=copy,
-            paste=paste,
             undoLastPoint=undoLastPoint,
             undo=undo,
             removePoint=removePoint,
@@ -620,7 +575,6 @@ class MainWindow(QtWidgets.QMainWindow):
             createLineMode=createLineMode,
             createPointMode=createPointMode,
             createLineStripMode=createLineStripMode,
-            createAiPolygonMode=createAiPolygonMode,
             zoom=zoom,
             zoomIn=zoomIn,
             zoomOut=zoomOut,
@@ -628,7 +582,6 @@ class MainWindow(QtWidgets.QMainWindow):
             keepPrevScale=keepPrevScale,
             fitWindow=fitWindow,
             fitWidth=fitWidth,
-            brightnessContrast=brightnessContrast,
             zoomActions=zoomActions,
             openNextImg=openNextImg,
             openPrevImg=openPrevImg,
@@ -637,7 +590,6 @@ class MainWindow(QtWidgets.QMainWindow):
             # XXX: need to add some actions here to activate the shortcut
             editMenu=(
                 edit,
-                duplicate,
                 delete,
                 None,
                 undo,
@@ -655,12 +607,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 createLineMode,
                 createPointMode,
                 createLineStripMode,
-                createAiPolygonMode,
                 editMode,
                 edit,
-                duplicate,
-                copy,
-                paste,
                 delete,
                 undo,
                 undoLastPoint,
@@ -674,9 +622,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 createLineMode,
                 createPointMode,
                 createLineStripMode,
-                createAiPolygonMode,
                 editMode,
-                brightnessContrast,
             ),
             onShapesPresent=(saveAs, hideAll, showAll),
         )
@@ -733,7 +679,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 fitWindow,
                 fitWidth,
                 None,
-                brightnessContrast,
             ),
         )
 
@@ -741,33 +686,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Custom context menu for the canvas widget:
         utils.addActions(self.canvas.menus[0], self.actions.menu)
-        utils.addActions(
-            self.canvas.menus[1],
-            (
-                action("&Copy here", self.copyShape),
-                action("&Move here", self.moveShape),
-            ),
-        )
-
-        selectAiModel = QtWidgets.QWidgetAction(self)
-        selectAiModel.setDefaultWidget(QtWidgets.QWidget())
-        selectAiModel.defaultWidget().setLayout(QtWidgets.QVBoxLayout())
-        self._selectAiModelComboBox = QtWidgets.QComboBox()
-        selectAiModel.defaultWidget().layout().addWidget(
-            self._selectAiModelComboBox
-        )
-        self._selectAiModelComboBox.addItems([model.name for model in MODELS])
-        self._selectAiModelComboBox.setCurrentIndex(1)
-        self._selectAiModelComboBox.setEnabled(False)
-        self._selectAiModelComboBox.currentIndexChanged.connect(
-            lambda: self.canvas.initializeAiModel(
-                name=self._selectAiModelComboBox.currentText()
-            )
-        )
-        selectAiModelLabel = QtWidgets.QLabel(self.tr("AI Model"))
-        selectAiModelLabel.setAlignment(QtCore.Qt.AlignCenter)
-        selectAiModelLabel.setFont(QtGui.QFont(None, 10))
-        selectAiModel.defaultWidget().layout().addWidget(selectAiModelLabel)
 
         self.tools = self.toolbar("Tools")
         self.actions.tool = (
@@ -780,17 +698,12 @@ class MainWindow(QtWidgets.QMainWindow):
             None,
             createMode,
             editMode,
-            duplicate,
-            copy,
-            paste,
             delete,
             undo,
-            brightnessContrast,
             None,
             zoom,
             fitWidth,
             None,
-            selectAiModel,
         )
 
         self.statusBar().showMessage(str(self.tr("%s started.")) % __appname__)
@@ -814,7 +727,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.zoom_level = 100
         self.fit_window = False
         self.zoom_values = {}  # key=filename, value=(zoom_mode, zoom_value)
-        self.brightnessContrast_values = {}
         self.scroll_values = {
             Qt.Horizontal: {},
             Qt.Vertical: {},
@@ -893,7 +805,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createLineMode,
             self.actions.createPointMode,
             self.actions.createLineStripMode,
-            self.actions.createAiPolygonMode,
             self.actions.editMode,
         )
         utils.addActions(self.menus.edit, actions + self.actions.editMenu)
@@ -925,7 +836,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(True)
         self.actions.createPointMode.setEnabled(True)
         self.actions.createLineStripMode.setEnabled(True)
-        self.actions.createAiPolygonMode.setEnabled(True)
         title = __appname__
         if self.filename is not None:
             title = "{} - {}".format(title, self.filename)
@@ -1003,8 +913,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createLineMode.setEnabled(True)
             self.actions.createPointMode.setEnabled(True)
             self.actions.createLineStripMode.setEnabled(True)
-            self.actions.createAiPolygonMode.setEnabled(True)
-            self._selectAiModelComboBox.setEnabled(False)
         else:
             if createMode == "polygon":
                 self.actions.createMode.setEnabled(False)
@@ -1013,8 +921,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createAiPolygonMode.setEnabled(True)
-                self._selectAiModelComboBox.setEnabled(False)
             elif createMode == "rectangle":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(False)
@@ -1022,8 +928,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createAiPolygonMode.setEnabled(True)
-                self._selectAiModelComboBox.setEnabled(False)
             elif createMode == "line":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -1031,8 +935,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(False)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createAiPolygonMode.setEnabled(True)
-                self._selectAiModelComboBox.setEnabled(False)
             elif createMode == "point":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -1040,8 +942,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(False)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createAiPolygonMode.setEnabled(True)
-                self._selectAiModelComboBox.setEnabled(False)
             elif createMode == "circle":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -1049,8 +949,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createAiPolygonMode.setEnabled(True)
-                self._selectAiModelComboBox.setEnabled(False)
             elif createMode == "linestrip":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -1058,20 +956,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(False)
-                self.actions.createAiPolygonMode.setEnabled(True)
-                self._selectAiModelComboBox.setEnabled(False)
-            elif createMode == "ai_polygon":
-                self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createAiPolygonMode.setEnabled(False)
-                self.canvas.initializeAiModel(
-                    name=self._selectAiModelComboBox.currentText()
-                )
-                self._selectAiModelComboBox.setEnabled(True)
             else:
                 raise ValueError("Unsupported createMode: %s" % createMode)
         self.actions.editMode.setEnabled(not edit)
@@ -1198,8 +1082,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._noSelectionSlot = False
         n_selected = len(selected_shapes)
         self.actions.delete.setEnabled(n_selected)
-        self.actions.duplicate.setEnabled(n_selected)
-        self.actions.copy.setEnabled(n_selected)
         self.actions.edit.setEnabled(n_selected == 1)
 
     def addLabel(self, shape):
@@ -1370,20 +1252,6 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return False
 
-    def duplicateSelectedShape(self):
-        added_shapes = self.canvas.duplicateSelectedShapes()
-        self.labelList.clearSelection()
-        for shape in added_shapes:
-            self.addLabel(shape)
-        self.setDirty()
-
-    def pasteSelectedShape(self):
-        self.loadShapes(self._copied_shapes, replace=False)
-        self.setDirty()
-
-    def copySelectedShape(self):
-        self._copied_shapes = [s.copy() for s in self.canvas.selectedShapes]
-        self.actions.paste.setEnabled(len(self._copied_shapes) > 0)
 
     def labelSelectionChanged(self):
         if self._noSelectionSlot:
@@ -1511,29 +1379,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._config["keep_prev_scale"] = enabled
         self.actions.keepPrevScale.setChecked(enabled)
 
-    def onNewBrightnessContrast(self, qimage):
-        self.canvas.loadPixmap(
-            QtGui.QPixmap.fromImage(qimage), clear_shapes=False
-        )
-
-    def brightnessContrast(self, value):
-        dialog = BrightnessContrastDialog(
-            utils.img_data_to_pil(self.imageData),
-            self.onNewBrightnessContrast,
-            parent=self,
-        )
-        brightness, contrast = self.brightnessContrast_values.get(
-            self.filename, (None, None)
-        )
-        if brightness is not None:
-            dialog.slider_brightness.setValue(brightness)
-        if contrast is not None:
-            dialog.slider_contrast.setValue(contrast)
-        dialog.exec_()
-
-        brightness = dialog.slider_brightness.value()
-        contrast = dialog.slider_contrast.value()
-        self.brightnessContrast_values[self.filename] = (brightness, contrast)
 
     def togglePolygons(self, value):
         for item in self.labelList:
@@ -1641,35 +1486,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.setScroll(
                     orientation, self.scroll_values[orientation][self.filename]
                 )
-        # set brightness contrast values
-        dialog = BrightnessContrastDialog(
-            utils.img_data_to_pil(self.imageData),
-            self.onNewBrightnessContrast,
-            parent=self,
-        )
-        brightness, contrast = self.brightnessContrast_values.get(
-            self.filename, (None, None)
-        )
-        if self._config["keep_prev_brightness"] and self.recentFiles:
-            brightness, _ = self.brightnessContrast_values.get(
-                self.recentFiles[0], (None, None)
-            )
-        if self._config["keep_prev_contrast"] and self.recentFiles:
-            _, contrast = self.brightnessContrast_values.get(
-                self.recentFiles[0], (None, None)
-            )
-        if brightness is not None:
-            dialog.slider_brightness.setValue(brightness)
-        if contrast is not None:
-            dialog.slider_contrast.setValue(contrast)
-        self.brightnessContrast_values[self.filename] = (brightness, contrast)
-        if brightness is not None or contrast is not None:
-            dialog.onNewValue(None)
-        self.paintCanvas()
-        self.addRecentFile(self.filename)
-        self.toggleActions(True)
-        self.canvas.setFocus()
-        self.status(str(self.tr("Loaded %s")) % osp.basename(str(filename)))
         return True
 
     def resizeEvent(self, event):
@@ -2033,12 +1849,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 for action in self.actions.onShapesPresent:
                     action.setEnabled(False)
 
-    def copyShape(self):
-        self.canvas.endMove(copy=True)
-        for shape in self.canvas.selectedShapes:
-            self.addLabel(shape)
-        self.labelList.clearSelection()
-        self.setDirty()
 
     def moveShape(self):
         self.canvas.endMove(copy=False)
