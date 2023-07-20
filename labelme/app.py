@@ -12,6 +12,7 @@ import imgviz
 import natsort
 from qtpy import QtCore
 from qtpy.QtCore import Qt
+from qtpy.QtCore import QTimer
 from qtpy import QtGui
 from qtpy import QtWidgets
 
@@ -66,6 +67,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if config is None:
             config = get_config()
         self._config = config
+
+        self.dirpath = None
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.updateDirectory)
 
         # set default shape colors
         Shape.line_color = QtGui.QColor(*self._config["shape"]["line_color"])
@@ -431,6 +436,18 @@ class MainWindow(QtWidgets.QMainWindow):
             tip=self.tr("Show tutorial page"),
         )
 
+        train = action(
+            self.tr("&train"),
+            self.train,
+            tip=self.tr("train"),
+        )
+
+        showResult = action(
+            self.tr("&showResult"),
+            self.showResult,
+            tip=self.tr("Show result"),
+        )
+
         zoom = QtWidgets.QWidgetAction(self)
         zoomBoxLayout = QtWidgets.QVBoxLayout()
         zoomBoxLayout.addWidget(self.zoomWidget)
@@ -634,6 +651,7 @@ class MainWindow(QtWidgets.QMainWindow):
             edit=self.menu(self.tr("&Edit")),
             view=self.menu(self.tr("&View")),
             help=self.menu(self.tr("&Help")),
+            model=self.menu(self.tr("&model")),
             recentFiles=QtWidgets.QMenu(self.tr("Open &Recent")),
             labelList=labelMenu,
         )
@@ -680,6 +698,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 fitWidth,
                 None,
             ),
+        )
+        utils.addActions(
+            self.menus.model,
+            (
+                train,
+                showResult,
+            )
         )
 
         self.menus.file.aboutToShow.connect(self.updateFileMenu)
@@ -892,6 +917,105 @@ class MainWindow(QtWidgets.QMainWindow):
     def tutorial(self):
         url = "https://github.com/wkentaro/labelme/tree/main/examples/tutorial"  # NOQA
         webbrowser.open(url)
+
+    def train(self):
+        pass
+
+    def showResult(self):
+        import json
+        import matplotlib.pyplot as plt
+        from collections import defaultdict
+        import seaborn as sns
+        import numpy as np
+
+        def load_json_logs(json_log):
+            log_dict = dict()
+            prev_step = 0
+            with open(json_log) as log_file:
+                for line in log_file:
+                    log = json.loads(line.strip())
+                    if 'step' in log and log['step'] != 0:
+                        step = log['step']
+                        prev_step = step
+                    else:
+                        step = prev_step
+                    if step not in log_dict:
+                        log_dict[step] = defaultdict(list)
+                    for k, v in log.items():
+                        log_dict[step][k].append(v)
+            return log_dict
+
+        def plot_curve(log_dict, out):
+            sns.set_style('dark')
+            metrics = ['mIoU', 'mAcc', 'mRAcc']
+            legend = metrics
+            epochs = list(log_dict.keys())
+            for j, metric in enumerate(metrics):
+                # print(f'plot curve of {json_log}, metric is {metric}')
+                plot_epochs = []
+                plot_values = []
+                for epoch in epochs:
+                    epoch_logs = log_dict[epoch]
+                    if metric not in epoch_logs.keys():
+                        continue
+                    plot_epochs.append(epoch)
+                    plot_values.append(epoch_logs[metric][0])
+                ax = plt.gca()
+                label = legend[j]
+                ax.set_xticks(plot_epochs)
+                plt.xlabel('step')
+                plt.plot(plot_epochs, plot_values, label=label, marker='o')
+                plt.legend()
+                plt.grid(True)
+                plt.xticks(range(0, 40000, 5000))
+                plt.title('metric_curve')
+            if out is None:
+                plt.show()
+            else:
+                # print(f'save curve to: {out}')
+                plt.savefig(out + '/metric_curve')
+                plt.cla()
+
+        def plot_matrix(json_matrix, out):
+            with open(json_matrix) as f:
+                data = json.load(f)
+            confusion = np.array(data['matrix'])
+
+            plt.matshow(confusion, cmap=plt.cm.Blues)  # 热度图，后面是指定的颜色块，cmap可设置其他的不同颜色
+            plt.rcParams['font.sans-serif'] = ['SimHei']  # plt.rcParams两行是用于解决标签不能显示汉字的问题
+            plt.rcParams['axes.unicode_minus'] = False
+            plt.colorbar()  # 要不要加右边的colorbar。不想加就注释掉。
+            plt.ylabel('True label')
+            plt.xlabel('Predicted label')
+            plt.title('混淆矩阵')  # 如果不加上面两行，汉字会显示不出来。
+            classes = data['class_names']  # 第一个是迭代对象，表示坐标的显示顺序
+            indices = range(len(confusion))  # 第二个参数是坐标轴显示列表
+            plt.xticks(indices, classes, rotation=45)  # 设置横坐标方向，rotation=45为45度倾斜
+            plt.yticks(indices, classes)
+
+            for i in range(len(confusion)):
+                for j in range(len(confusion)):
+                    plt.text(j, i, confusion[i][j],  # 注意是将confusion[i][j]放到j,i这个位置。
+                             fontsize=15,
+                             horizontalalignment="center",  # 水平居中。
+                             verticalalignment="center",  # 垂直居中。
+                             color="white" if confusion[i, j] > confusion.max() / 2. else "black")  # 颜色控制。
+
+            if out is None:
+                plt.show()
+            else:
+                plt.savefig(out + '/confusion_matrix')
+                plt.cla()
+
+        # 由train返回结果路径赋值给json_log
+        # 由test返回结果路径赋值给json_matrix
+        json_log = 'D:/model_deeplearning/wpw/defect-w/run/mmseg_configs/efficientvitseg_b2_512x512_40k_lidianchi3g/vis_data/20230713_141717.json'
+        json_matrix = 'D:/model_deeplearning/wpw/defect-w/run/mmseg_configs/segformer_mit-b1_512x512_n7_40k_lidianchi3g_seg/20230719_122953/20230719_122953.json'
+        log_dicts = load_json_logs(json_log)
+        out = os.path.dirname(os.path.abspath(__file__)) + '/out'
+        plot_curve(log_dicts, out)
+        plot_matrix(json_matrix, out)
+        self.onlyShowResult(out)
 
     def toggleDrawingSensitive(self, drawing=True):
         """Toggle drawing sensitive.
@@ -1944,6 +2068,31 @@ class MainWindow(QtWidgets.QMainWindow):
                 item.setCheckState(Qt.Unchecked)
             self.fileListWidget.addItem(item)
         self.openNextImg(load=load)
+        self.dirpath = dirpath
+        self.timer.start(1000)  # 设置定时器间隔为1秒
+
+    def onlyShowResult(self, dirpath, load=True):
+        self.actions.openNextImg.setEnabled(True)
+        self.actions.openPrevImg.setEnabled(True)
+        self.dirpath = dirpath
+        self.filename = None
+        self.fileListWidget.clear()
+        for filename in self.scanAllImages(self.dirpath):
+            item = QtWidgets.QListWidgetItem(filename)
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            item.setCheckState(Qt.Unchecked)
+            self.fileListWidget.addItem(item)
+        self.openNextImg(load=load)
+        self.timer.start(1000)  # 设置定时器间隔为1秒
+
+    def updateDirectory(self):
+        # 重新扫描目录文件并更新文件列表
+        self.fileListWidget.clear()
+        for filename in self.scanAllImages(self.dirpath):
+            item = QtWidgets.QListWidgetItem(filename)
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            item.setCheckState(Qt.Unchecked)
+            self.fileListWidget.addItem(item)
 
     def scanAllImages(self, folderPath):
         extensions = [
