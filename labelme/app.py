@@ -988,7 +988,7 @@ class MainWindow(QtWidgets.QMainWindow):
             plt.ylabel('True label')
             plt.xlabel('Predicted label')
             plt.title('混淆矩阵')  # 如果不加上面两行，汉字会显示不出来。
-            classes = data['class_names']  # 第一个是迭代对象，表示坐标的显示顺序
+            classes = data['ret_metrics_class']['Class']  # 第一个是迭代对象，表示坐标的显示顺序
             indices = range(len(confusion))  # 第二个参数是坐标轴显示列表
             plt.xticks(indices, classes, rotation=45)  # 设置横坐标方向，rotation=45为45度倾斜
             plt.yticks(indices, classes)
